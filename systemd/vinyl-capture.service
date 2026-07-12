@@ -24,6 +24,9 @@ Environment=GATE_OPEN_SECS=0.4
 Environment=START_VOLUME=18
 # Ignore pause/stop/skip from the Sonos app - only the needle stops playback
 Environment=LOCK_TRANSPORT=yes
+# Push notification on session start/end, e.g. https://ntfy.sh/<your-topic>
+# (subscribe to the topic in the ntfy app); empty = disabled
+Environment=NOTIFY_URL=
 # Snapshots for track recognition (vinyl-recognize.service), tmpfs
 Environment=SNAPSHOT_DIR=/run/vinyl
 Environment=SNAPSHOT_SECS=40

@@ -24,6 +24,9 @@ Configuration via environment variables:
                  are ignored - while the record is spinning,
                  playback is resumed automatically. Only the
                  needle can stop it.                           (default yes)
+  NOTIFY_URL     HTTP endpoint (e.g. https://ntfy.sh/mytopic) that
+                 receives a push message via POST on session
+                 start/end; empty = disabled                   (default empty)
 """
 import json
 import os
@@ -94,6 +97,30 @@ def reset_start_volume():
             log(f"vinyl-gate: start volume {START_VOLUME} for '{o['name']}'")
     except Exception as e:
         log(f"vinyl-gate: setting start volume failed: {e}")
+
+
+NOTIFY_URL = os.environ.get("NOTIFY_URL", "")
+
+
+def notify(message, tag):
+    """Sends a push message (ntfy-compatible) - in a thread so a slow
+    server can never stall the audio path."""
+    if not NOTIFY_URL:
+        return
+
+    def _send():
+        try:
+            req = urllib.request.Request(
+                NOTIFY_URL,
+                data=message.encode(),
+                headers={"Title": "Turntable", "Tags": tag},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10).close()
+        except Exception as e:
+            log(f"vinyl-gate: notification failed: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
 
 
 LOCK_TRANSPORT = os.environ.get("LOCK_TRANSPORT", "yes").lower() in ("1", "yes", "true")
@@ -182,6 +209,7 @@ def main():
             loud_streak = loud_streak + 1 if level >= GATE_ON else 0
             if loud_streak >= OPEN_BLOCKS:
                 log(f"vinyl-gate: signal detected (level {level}) - gate open")
+                notify("Record playing - playback started", "musical_note")
                 reset_start_volume()
                 # blocks until OwnTone is reading the pipe
                 fifo = open(FIFO, "wb", buffering=0)
@@ -218,6 +246,7 @@ def main():
             quiet_streak = quiet_streak + 1 if level < GATE_OFF else 0
             if quiet_streak >= HOLD_BLOCKS:
                 log("vinyl-gate: silence - gate closed")
+                notify("Playback ended - record finished or needle lifted", "stop_button")
                 GATE["open_since"] = None
                 fifo.close()
                 fifo = None
