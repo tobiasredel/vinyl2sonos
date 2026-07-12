@@ -26,6 +26,9 @@ Environment=START_VOLUME=18
 Environment=SNAPSHOT_DIR=/run/vinyl
 Environment=SNAPSHOT_SECS=40
 RuntimeDirectory=vinyl
+# Wait until OwnTone is actually ready - feeding the pipe while OwnTone is
+# still starting up triggers a startup race there (autostart fails)
+ExecStartPre=/bin/sh -c 'for i in $(seq 60); do curl -sf -m 2 http://localhost:3689/api/config >/dev/null && exit 0; sleep 1; done; echo "OwnTone not reachable - starting anyway"'
 ExecStart=/bin/sh -c 'exec arecord -D "$ALSA_DEVICE" -f S16_LE -r 44100 -c 2 -t raw --buffer-time=500000 | sox -q -t raw -r 44100 -e signed -b 16 -c 2 - -t raw - highpass "$HIGHPASS_HZ" gain -l "$GAIN_DB" | /usr/local/bin/vinyl-gate.py /srv/owntone/pipes/__PIPE_NAME__.fifo'
 Restart=always
 RestartSec=5

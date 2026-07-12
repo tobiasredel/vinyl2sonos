@@ -27,7 +27,7 @@ esac
 
 msg "Installing packages (sox, alsa-utils, avahi, python3-venv)..."
 apt-get update -q
-DEBIAN_FRONTEND=noninteractive apt-get install -y -q sox alsa-utils avahi-daemon python3-venv wget gpg
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q sox alsa-utils avahi-daemon python3-venv wget gpg curl
 
 if ! apt-cache policy owntone 2>/dev/null | grep -q Candidate; then
   msg "Adding the OwnTone apt repository (${VERSION_CODENAME})..."
