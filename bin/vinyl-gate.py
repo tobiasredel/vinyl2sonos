@@ -20,11 +20,17 @@ Configuration via environment variables:
                  10 s WAV snapshots for track recognition;
                  empty = disabled                              (default empty)
   SNAPSHOT_SECS  interval between snapshots                    (default 40)
+  LOCK_TRANSPORT if "yes": pause/stop/skip from the Sonos app
+                 are ignored - while the record is spinning,
+                 playback is resumed automatically. Only the
+                 needle can stop it.                           (default yes)
 """
 import json
 import os
 import sys
 import collections
+import threading
+import time
 import urllib.request
 import wave
 from array import array
@@ -90,6 +96,34 @@ def reset_start_volume():
         log(f"vinyl-gate: setting start volume failed: {e}")
 
 
+LOCK_TRANSPORT = os.environ.get("LOCK_TRANSPORT", "yes").lower() in ("1", "yes", "true")
+OWNTONE_PLAYER = "http://localhost:3689/api/player"
+# set by main(): timestamp of gate opening, or None
+GATE = {"open_since": None}
+
+
+def transport_watchdog():
+    """Resumes playback if it gets paused while the record is spinning.
+
+    Pause/stop/skip from the Sonos app make no sense for vinyl (the needle
+    keeps going); this thread turns them into no-ops."""
+    while True:
+        time.sleep(2)
+        since = GATE["open_since"]
+        # 5 s grace period after gate opening so autostart can kick in
+        if since is None or time.time() - since < 5:
+            continue
+        try:
+            with urllib.request.urlopen(OWNTONE_PLAYER, timeout=3) as r:
+                state = json.load(r).get("state")
+            if state != "play":
+                req = urllib.request.Request(OWNTONE_PLAYER + "/play", method="PUT")
+                urllib.request.urlopen(req, timeout=3).close()
+                log("vinyl-gate: paused/stopped while record is spinning - resumed")
+        except Exception:
+            pass  # OwnTone briefly unreachable - retry in 2 s
+
+
 SNAPSHOT_DIR = os.environ.get("SNAPSHOT_DIR", "")
 SNAPSHOT_BLOCKS = int(float(os.environ.get("SNAPSHOT_SECS", "40")) / BLOCK_SECS)
 SAMPLE_BLOCKS = int(10 / BLOCK_SECS)  # 10 s of audio per snapshot
@@ -131,7 +165,10 @@ def main():
     loud_streak = 0
     quiet_streak = 0
 
-    log(f"vinyl-gate: on={GATE_ON} off={GATE_OFF} hold={HOLD_BLOCKS * BLOCK_SECS:.0f}s")
+    log(f"vinyl-gate: on={GATE_ON} off={GATE_OFF} hold={HOLD_BLOCKS * BLOCK_SECS:.0f}s"
+        + (" transport-lock" if LOCK_TRANSPORT else ""))
+    if LOCK_TRANSPORT:
+        threading.Thread(target=transport_watchdog, daemon=True).start()
 
     while True:
         block = read_block(stdin)
@@ -148,12 +185,14 @@ def main():
                 reset_start_volume()
                 # blocks until OwnTone is reading the pipe
                 fifo = open(FIFO, "wb", buffering=0)
+                GATE["open_since"] = time.time()
                 try:
                     while prebuffer:
                         fifo.write(prebuffer.popleft())
                 except BrokenPipeError:
                     fifo.close()
                     fifo = None
+                    GATE["open_since"] = None
                 quiet_streak = 0
                 blocks_open = 0
                 snapshot_buf.clear()
@@ -170,6 +209,7 @@ def main():
                 fifo.write(block)
             except BrokenPipeError:
                 log("vinyl-gate: reader gone (OwnTone restart?) - gate closed")
+                GATE["open_since"] = None
                 fifo.close()
                 fifo = None
                 loud_streak = 0
@@ -178,6 +218,7 @@ def main():
             quiet_streak = quiet_streak + 1 if level < GATE_OFF else 0
             if quiet_streak >= HOLD_BLOCKS:
                 log("vinyl-gate: silence - gate closed")
+                GATE["open_since"] = None
                 fifo.close()
                 fifo = None
                 loud_streak = 0

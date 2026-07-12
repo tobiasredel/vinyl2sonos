@@ -22,6 +22,8 @@ Environment=GATE_OPEN_SECS=0.4
 # Volume (0..100) applied to the selected outputs on every session start;
 # empty = keep the last volume
 Environment=START_VOLUME=18
+# Ignore pause/stop/skip from the Sonos app - only the needle stops playback
+Environment=LOCK_TRANSPORT=yes
 # Snapshots for track recognition (vinyl-recognize.service), tmpfs
 Environment=SNAPSHOT_DIR=/run/vinyl
 Environment=SNAPSHOT_SECS=40

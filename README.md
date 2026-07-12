@@ -39,6 +39,9 @@ turntable ──USB──▶ arecord ──▶ sox (subsonic filter + gain/limit
   switching your turntable on/off doesn't trigger playback.
 - **Consistent start volume** — every session starts at a configurable
   volume instead of whatever you cranked it to last night.
+- **Transport lock** — pause/stop/skip in the Sonos app are meaningless for
+  vinyl (the needle keeps going), so they're automatically undone within
+  ~2 s. Only the needle stops playback. (`LOCK_TRANSPORT=no` to disable.)
 - **Subsonic filter** — 22 Hz high-pass removes turntable rumble before it
   eats your headroom (and your subwoofer).
 - **SD-card friendly** — snapshots live in tmpfs, the pipes carry
@@ -88,6 +91,7 @@ All knobs live as `Environment=` lines in
 | `GATE_HOLD_SECS` | `10`    | Silence duration before playback stops           |
 | `GATE_OPEN_SECS` | `0.4`   | Sustained signal required to start (pop filter)  |
 | `START_VOLUME`   | `18`    | Speaker volume at session start; empty = keep    |
+| `LOCK_TRANSPORT` | `yes`   | Auto-resume if paused/stopped while spinning     |
 | `HIGHPASS_HZ`    | `22`    | Subsonic filter corner frequency                 |
 | `SNAPSHOT_SECS`  | `40`    | Interval between recognition attempts            |
 
