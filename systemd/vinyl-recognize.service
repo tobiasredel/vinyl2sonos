@@ -1,0 +1,17 @@
+[Unit]
+Description=Track recognition for turntable stream (Shazam -> OwnTone metadata)
+After=network-online.target vinyl-capture.service
+Wants=network-online.target
+
+[Service]
+User=owntone
+Group=owntone
+Environment=SNAPSHOT_DIR=/run/vinyl
+Environment=META_PIPE=/srv/owntone/pipes/__PIPE_NAME__.fifo.metadata
+Environment=DEFAULT_TITLE=__PIPE_NAME__
+ExecStart=/opt/vinyl-recognize/venv/bin/python /usr/local/bin/vinyl-recognize.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

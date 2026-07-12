@@ -1,0 +1,34 @@
+[Unit]
+Description=Turntable capture (USB phono -> silence gate -> OwnTone pipe)
+After=sound.target owntone.service
+Wants=owntone.service
+
+[Service]
+User=owntone
+Group=audio
+# ALSA capture device (find yours with: arecord -l); use the card NAME, not
+# its number - numbers can change between reboots
+Environment=ALSA_DEVICE=hw:CODEC,0
+# Subsonic high-pass filter (Hz) to remove turntable rumble
+Environment=HIGHPASS_HZ=22
+# Digital gain in dB (many USB phono ADCs record far too quietly - see
+# tools/measure-gain.sh); the sox limiter (-l) prevents hard clipping
+Environment=GAIN_DB=12
+# Gate thresholds apply AFTER the gain stage
+Environment=GATE_ON=4800
+Environment=GATE_OFF=1600
+Environment=GATE_HOLD_SECS=10
+Environment=GATE_OPEN_SECS=0.4
+# Volume (0..100) applied to the selected outputs on every session start;
+# empty = keep the last volume
+Environment=START_VOLUME=18
+# Snapshots for track recognition (vinyl-recognize.service), tmpfs
+Environment=SNAPSHOT_DIR=/run/vinyl
+Environment=SNAPSHOT_SECS=40
+RuntimeDirectory=vinyl
+ExecStart=/bin/sh -c 'exec arecord -D "$ALSA_DEVICE" -f S16_LE -r 44100 -c 2 -t raw --buffer-time=500000 | sox -q -t raw -r 44100 -e signed -b 16 -c 2 - -t raw - highpass "$HIGHPASS_HZ" gain -l "$GAIN_DB" | /usr/local/bin/vinyl-gate.py /srv/owntone/pipes/__PIPE_NAME__.fifo'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
